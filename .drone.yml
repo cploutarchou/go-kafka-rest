@@ -1,0 +1,42 @@
+kind: pipeline
+name: default
+
+trigger:
+  branch:
+    - master
+  event:
+    - push
+    - pull_request
+
+platform:
+  os: linux
+  arch: amd64
+
+clone:
+  disable: false
+
+steps:
+  - name: setup
+    image: golang:1.19
+    commands:
+      - go version
+
+  - name: vet
+    image: golang:1.19
+    commands:
+      - go vet ./...
+
+  - name: format
+    image: golang:1.19
+    commands:
+      - go fmt ./...
+
+  - name: build
+    image: golang:1.19
+    commands:
+      - go build -v ./...
+
+  - name: test
+    image: golang:1.19
+    commands:
+      - go test -v ./...
