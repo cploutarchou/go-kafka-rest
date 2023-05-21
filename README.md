@@ -1,6 +1,7 @@
 # Rest API With JWT for Kafka
 
 [![Go](https://github.com/cploutarchou/go-kafka-rest/actions/workflows/go.yml/badge.svg)](https://github.com/cploutarchou/go-kafka-rest/actions/workflows/go.yml)
+[![Build Status](https://drone.cydevcloud.com/api/badges/cploutarchou/go-kafka-rest/status.svg)](https://drone.cydevcloud.com/cploutarchou/go-kafka-rest)
 
 This project demonstrates building a REST API with JWT (JSON Web Token) authentication for Kafka using Golang. The API is implemented using the Golang programming language and leverages the power of Kafka for message processing and communication.
 
