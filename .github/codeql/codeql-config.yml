@@ -1,0 +1,6 @@
+queries:
+  - name: Security Analysis
+    paths:
+      - '**/*.go'
+    queries:
+      - security-and-quality.qls
