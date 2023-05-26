@@ -20,6 +20,8 @@ pipeline:
       - go test -v ./...
 
   start-docker-compose:
-    image: docker/compose
+    image: docker/compose:2.18.1
+    environment:
+      DOCKER_HOST: "unix:///var/run/docker.sock"
     commands:
-      - source .env && docker-compose up
+      - source .env && docker-compose up -d
