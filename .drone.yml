@@ -20,16 +20,6 @@ pipeline:
       - go test -v ./...
 
   start-docker-compose:
+    image: docker/compose:2.18.1
     commands:
-      - docker-compose up -d
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_MAX_CONNECTIONS=${POSTGRES_MAX_CONNECTIONS}
-      - POSTGRES_SHARED_BUFFERS=${POSTGRES_SHARED_BUFFERS}
-      - POSTGRES_WORK_MEM=${POSTGRES_WORK_MEM}
-      - POSTGRES_EFFECTIVE_CACHE_SIZE=${POSTGRES_EFFECTIVE_CACHE_SIZE}
-      - PGADMIN_DEFAULT_USER=${PGADMIN_DEFAULT_USER}
-      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL}
-      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD}
+      - source .env && docker compose up -d
