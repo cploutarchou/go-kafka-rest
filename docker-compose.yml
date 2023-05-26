@@ -1,4 +1,5 @@
 version: '3'
+
 services:
   postgres:
     image: postgres:latest
@@ -8,31 +9,29 @@ services:
     volumes:
       - progresDB:/var/lib/postgresql/data
     env_file:
-      - .env
+      - app.env
     restart: unless-stopped
-    # Additional configuration options
     environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_MAX_CONNECTIONS=${POSTGRES_MAX_CONNECTIONS}
       - POSTGRES_SHARED_BUFFERS=${POSTGRES_SHARED_BUFFERS}
       - POSTGRES_WORK_MEM=${POSTGRES_WORK_MEM}
       - POSTGRES_EFFECTIVE_CACHE_SIZE=${POSTGRES_EFFECTIVE_CACHE_SIZE}
-      # Add more PostgreSQL configuration options as needed
 
   pgAdmin:
     image: dpage/pgadmin4
     container_name: pgAdmin
     env_file:
-      - .env
+      - app.env
     ports:
       - "5050:80"
     restart: unless-stopped
-    # Additional configuration options
     environment:
       - PGADMIN_DEFAULT_USER=${PGADMIN_DEFAULT_USER}
       - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL}
       - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD}
-      # Add more pgAdmin configuration options as needed
 
 volumes:
   progresDB:
-  # Add additional volume options as needed (e.g., backup strategies, permissions)
