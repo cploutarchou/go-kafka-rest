@@ -22,7 +22,7 @@ pipeline:
   start-docker-compose:
     image: docker/compose:1.29.2
     commands:
-      - docker compose up -d
+      - docker-xxscompose up -d
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
