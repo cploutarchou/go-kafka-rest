@@ -26,4 +26,10 @@ jobs:
         uses: github/codeql-action/init@v2
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v2
+        run: |
+          # Perform any necessary build or setup steps before running CodeQL analysis
+          # For example, you can run tests or compile your code.
+
+          # Run CodeQL analysis
+          codeql database create --language=go --source-root=./ --database=go-database
+          codeql analyze --database=go-database --format=sarif-latest --output=results.sarif
