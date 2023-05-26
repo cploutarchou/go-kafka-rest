@@ -19,9 +19,10 @@ pipeline:
     commands:
       - go test -v ./...
 
-  start-docker-compose:
-    image: docker/compose
+  start-docker-containers:
+    image: docker:20.10.12
     environment:
       DOCKER_HOST: "unix:///var/run/docker.sock"
     commands:
-      - source .env && docker-compose up -d
+      - source .env && docker run -d --name postgres -p 6500:5432 -e POSTGRES_USER=$POSTGRES_USER -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD -e POSTGRES_DB=$POSTGRES_DB -e POSTGRES_MAX_CONNECTIONS=$POSTGRES_MAX_CONNECTIONS -e POSTGRES_SHARED_BUFFERS=$POSTGRES_SHARED_BUFFERS -e POSTGRES_WORK_MEM=$POSTGRES_WORK_MEM -e POSTGRES_EFFECTIVE_CACHE_SIZE=$POSTGRES_EFFECTIVE_CACHE_SIZE postgres:latest
+      - source .env && docker run -d --name pgAdmin -p 5050:80 -e PGADMIN_DEFAULT_USER=$PGADMIN_DEFAULT_USER -e PGADMIN_DEFAULT_EMAIL=$PGADMIN_DEFAULT_EMAIL -e PGADMIN_DEFAULT_PASSWORD=$PGADMIN_DEFAULT_PASSWORD dpage/pgadmin4:latest
