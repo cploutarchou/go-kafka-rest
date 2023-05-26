@@ -20,6 +20,6 @@ pipeline:
       - go test -v ./...
 
   start-docker-compose:
-    image: docker/compose:2.18.1
+    image: docker/compose
     commands:
       - source .env && docker compose up -d
