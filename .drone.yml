@@ -21,7 +21,5 @@ pipeline:
 
   build-docker-compose:
     image: docker/compose:latest
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
     commands:
       - docker-compose build
