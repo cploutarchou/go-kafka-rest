@@ -20,6 +20,21 @@ pipeline:
       - go test -v ./...
 
   build-docker-compose:
-    image: docker/compose:latest
-    commands:
-      - docker-compose build
+    image: plugins/docker
+    settings:
+      repo: your-docker-repo
+      default_tags: true
+      build_args_from_env:
+        - POSTGRES_USER
+        - POSTGRES_PASSWORD
+        - POSTGRES_DB
+        - POSTGRES_MAX_CONNECTIONS
+        - POSTGRES_SHARED_BUFFERS
+        - POSTGRES_WORK_MEM
+        - POSTGRES_EFFECTIVE_CACHE_SIZE
+        - PGADMIN_DEFAULT_USER
+        - PGADMIN_DEFAULT_EMAIL
+        - PGADMIN_DEFAULT_PASSWORD
+    environment:
+      DOCKER_HOST:
+        from_secret: docker_host_secret
