@@ -22,4 +22,4 @@ pipeline:
   start-docker-compose:
     image: docker/compose
     commands:
-      - source .env && docker compose up
+      - source .env && docker-compose up
