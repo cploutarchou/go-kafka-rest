@@ -1,42 +1,27 @@
-kind: pipeline
-name: default
-
-trigger:
-  branch:
-    - master
-  event:
-    - push
-    - pull_request
-
-platform:
-  os: linux
-  arch: amd64
-
-clone:
-  disable: false
-
-steps:
-  - name: setup
+pipeline:
+  build:
     image: golang:1.19
     commands:
       - go version
 
-  - name: vet
+  vet:
     image: golang:1.19
     commands:
       - go vet ./...
 
-  - name: format
+  format:
     image: golang:1.19
     commands:
       - go fmt ./...
 
-  - name: build
-    image: golang:1.19
-    commands:
-      - go build -v ./...
-
-  - name: test
+  test:
     image: golang:1.19
     commands:
       - go test -v ./...
+
+  build-docker-compose:
+    image: docker/compose:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    commands:
+      - docker-compose build
