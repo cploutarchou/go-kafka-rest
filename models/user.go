@@ -13,7 +13,7 @@ type User struct {
 	Email     string     `gorm:"type:varchar(100);uniqueIndex;not null"`
 	Password  string     `gorm:"type:varchar(100);not null"`
 	Role      *string    `gorm:"type:varchar(50);default:'user';not null"`
-	Service   *string    `gorm:"type:varchar(50);default:'local';not null"`
+	Provider  *string    `gorm:"type:varchar(50);default:'local';not null"`
 	Photo     *string    `gorm:"not null;default:'default.png'"`
 	Verified  *bool      `gorm:"not null;default:false"`
 	CreatedAt *time.Time `gorm:"not null;default:now()"`
@@ -38,7 +38,8 @@ type UserResponse struct {
 	Name      string    `json:"name,omitempty"`
 	Email     string    `json:"email,omitempty"`
 	Role      string    `json:"role,omitempty"`
-	Service   string    `json:"provider"`
+	Photo     string    `json:"photo,omitempty"`
+	Provider  string    `json:"provider"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -49,7 +50,8 @@ func FilterUserRecord(user *User) UserResponse {
 		Name:      user.Name,
 		Email:     user.Email,
 		Role:      *user.Role,
-		Service:   *user.Service,
+		Photo:     *user.Photo,
+		Provider:  *user.Provider,
 		CreatedAt: *user.CreatedAt,
 		UpdatedAt: *user.UpdatedAt,
 	}
