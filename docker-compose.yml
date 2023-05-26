@@ -9,7 +9,7 @@ services:
     volumes:
       - progresDB:/var/lib/postgresql/data
     env_file:
-      - app.env
+      - sample.env
     restart: unless-stopped
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
@@ -24,7 +24,7 @@ services:
     image: dpage/pgadmin4
     container_name: pgAdmin
     env_file:
-      - app.env
+      - sample.env
     ports:
       - "5050:80"
     restart: unless-stopped
