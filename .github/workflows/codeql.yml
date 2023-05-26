@@ -4,7 +4,6 @@ on:
   push:
     branches: [ "master" ]
   pull_request:
-    # The branches below must be a subset of the branches above
     branches: [ "master" ]
   schedule:
     - cron: '23 23 * * 1'
@@ -12,7 +11,7 @@ on:
 jobs:
   analyze:
     name: Analyze
-    runs-on: ubuntu-latest
+    runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
     permissions:
       actions: read
       contents: read
@@ -20,27 +19,27 @@ jobs:
 
     strategy:
       fail-fast: false
+      matrix:
+        language: [ 'go' ]
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
-      - name: Set up Golang
-        uses: actions/setup-go@v2
-        with:
-          go-version: 1.19
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.19
 
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v2
-        with:
-          languages: go
-          config-file: .github/codeql/codeql-config.yml
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: ${{ matrix.language }}
 
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v2
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v2
 
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v2
-
-      - name: Upload SARIF results
-        uses: github/codeql-action/upload-sarif@v2
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+      with:
+        category: "/language:${{matrix.language}}"
