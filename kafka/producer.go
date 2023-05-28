@@ -7,7 +7,7 @@ import (
 	"github.com/Shopify/sarama"
 )
 
-type ProducerFactory func(brokers []string, config *sarama.Config) (sarama.SyncProducer, error)
+type ProducerFactory func(brokers []string, config *sarama.Config) (sarama.SyncProducer, sarama.AsyncProducer, error)
 
 var (
 	instance *Producer
@@ -15,8 +15,9 @@ var (
 )
 
 type Producer struct {
-	producer sarama.SyncProducer
-	mutex    *sync.Mutex
+	syncProducer  sarama.SyncProducer
+	asyncProducer sarama.AsyncProducer
+	mutex         *sync.Mutex
 }
 
 func NewProducer(brokers []string, conf *sarama.Config, factory ProducerFactory) (*Producer, error) {
@@ -37,21 +38,22 @@ func NewProducer(brokers []string, conf *sarama.Config, factory ProducerFactory)
 		config.Producer.Return.Successes = true
 		config.Producer.Compression = sarama.CompressionSnappy
 
-		producer, err := factory(brokers, config)
+		syncProducer, asyncProducer, err := factory(brokers, config)
 		if err != nil {
 			log.Fatal("Failed to start producer: ", err)
 		}
 
 		instance = &Producer{
-			producer: producer,
-			mutex:    &sync.Mutex{},
+			syncProducer:  syncProducer,
+			asyncProducer: asyncProducer,
+			mutex:         &sync.Mutex{},
 		}
 	})
 
 	return instance, nil
 }
 
-func (p *Producer) SendMessage(topic string, key string, value string) (partition int32, offset int64, err error) {
+func (p *Producer) SendMessageSync(topic string, key string, value string) (partition int32, offset int64, err error) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -62,6 +64,27 @@ func (p *Producer) SendMessage(topic string, key string, value string) (partitio
 	if key != "" {
 		msg.Key = sarama.StringEncoder(key)
 	}
-	partition, offset, err = p.producer.SendMessage(msg)
+	partition, offset, err = p.syncProducer.SendMessage(msg)
 	return
+}
+
+func (p *Producer) SendMessageAsync(topic string, key string, value string) {
+	msg := &sarama.ProducerMessage{
+		Topic: topic,
+		Value: sarama.StringEncoder(value),
+	}
+	if key != "" {
+		msg.Key = sarama.StringEncoder(key)
+	}
+	p.asyncProducer.Input() <- msg
+}
+
+func (p *Producer) Close() error {
+	if err := p.syncProducer.Close(); err != nil {
+		log.Fatalln("Failed to shut down sync producer cleanly", err)
+	}
+	if err := p.asyncProducer.Close(); err != nil {
+		log.Fatalln("Failed to shut down async producer cleanly", err)
+	}
+	return nil
 }
