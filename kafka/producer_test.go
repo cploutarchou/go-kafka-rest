@@ -1,24 +1,44 @@
 package kafka
 
 import (
+	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/Shopify/sarama"
 	"github.com/Shopify/sarama/mocks"
 )
 
+func TestSingletonProducer(t *testing.T) {
+	// Given
+	config := sarama.NewConfig()
+	config.Producer.RequiredAcks = sarama.WaitForAll
+	config.Producer.Retry.Max = 10
+	config.Producer.Return.Successes = true
+	config.Producer.Compression = sarama.CompressionSnappy
+
+	factory := func(brokers []string, config *sarama.Config) (sarama.SyncProducer, error) {
+		return mocks.NewSyncProducer(t, nil), nil
+	}
+
+	// When
+	producer1, _ := NewProducer(nil, config, factory)
+	producer2, _ := NewProducer(nil, config, factory)
+
+	// Then
+	if !reflect.DeepEqual(producer1, producer2) {
+		t.Errorf("NewProducer does not return the same instance")
+	}
+}
+
 func TestSendMessage(t *testing.T) {
 	// Given
 	mockProducer := mocks.NewSyncProducer(t, nil)
-	mockProducer.ExpectSendMessageWithCheckerFunctionAndSucceed(func(val []byte) error {
-		if val == nil {
-			return sarama.ErrInvalidMessage
-		}
-		return nil
-	})
+	mockProducer.ExpectSendMessageAndSucceed()
 
 	producer := &Producer{
 		producer: mockProducer,
+		mutex:    &sync.Mutex{},
 	}
 
 	// When

@@ -7,6 +7,8 @@ import (
 	"github.com/Shopify/sarama"
 )
 
+type ProducerFactory func(brokers []string, config *sarama.Config) (sarama.SyncProducer, error)
+
 var (
 	instance *Producer
 	once     sync.Once
@@ -17,7 +19,7 @@ type Producer struct {
 	mutex    *sync.Mutex
 }
 
-func NewProducer(brokers []string, conf *sarama.Config) (*Producer, error) {
+func NewProducer(brokers []string, conf *sarama.Config, factory ProducerFactory) (*Producer, error) {
 	once.Do(func() {
 		var config *sarama.Config
 		if conf == nil {
@@ -35,7 +37,7 @@ func NewProducer(brokers []string, conf *sarama.Config) (*Producer, error) {
 		config.Producer.Return.Successes = true
 		config.Producer.Compression = sarama.CompressionSnappy
 
-		producer, err := sarama.NewSyncProducer(brokers, config)
+		producer, err := factory(brokers, config)
 		if err != nil {
 			log.Fatal("Failed to start producer: ", err)
 		}
@@ -47,13 +49,6 @@ func NewProducer(brokers []string, conf *sarama.Config) (*Producer, error) {
 	})
 
 	return instance, nil
-}
-
-func (p *Producer) Close() error {
-	if err := p.producer.Close(); err != nil {
-		log.Fatalln("Failed to shut down producer cleanly", err)
-	}
-	return nil
 }
 
 func (p *Producer) SendMessage(topic string, key string, value string) (partition int32, offset int64, err error) {
