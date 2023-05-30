@@ -19,6 +19,8 @@ type Config struct {
 	JwtMaxAge    int           `mapstructure:"JWT_MAXAGE"`     // JWT_MAXAGE
 
 	ClientOrigin string `mapstructure:"CLIENT_ORIGIN"` // CLIENT_ORIGIN
+
+	KafkaBrokers string `mapstructure:"KAFKA_BROKERS"` // KAFKA_BROKER
 }
 
 var (
@@ -31,7 +33,7 @@ func LoadConfig(path string) (cfg *Config, err error) {
 	onceEnv.Do(func() {
 		viper.AddConfigPath(path)
 		viper.SetConfigType("env")
-		viper.SetConfigName("app")
+		viper.SetConfigName("sample")
 		viper.AutomaticEnv()
 
 		err = viper.ReadInConfig()
