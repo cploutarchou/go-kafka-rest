@@ -49,7 +49,7 @@ func NewProducer(brokers []string, conf *sarama.Config, factory ProducerFactory)
 			mutex:         &sync.Mutex{},
 		}
 	})
-
+	log.Println("🚀 Successfully connected to Kafka producer")
 	return instance, nil
 }
 
