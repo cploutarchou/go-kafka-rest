@@ -82,7 +82,7 @@ func SignUpUser(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"status": "success", "data": fiber.Map{"user": models.FilterUserRecord(&newUser)}})
 }
 
-// SignUpUser creates a new user with the given name, email and password.
+// SignInUser creates a new user with the given name, email and password.
 func SignInUser(c *fiber.Ctx) error {
 	var payload *models.SignInInput
 
