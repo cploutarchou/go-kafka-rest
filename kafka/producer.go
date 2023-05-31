@@ -69,14 +69,25 @@ func (p *Producer) SendMessageSync(topic string, key string, value string) (part
 }
 
 func (p *Producer) SendMessageAsync(topic string, key string, value string) {
-	msg := &sarama.ProducerMessage{
-		Topic: topic,
-		Value: sarama.StringEncoder(value),
-	}
-	if key != "" {
-		msg.Key = sarama.StringEncoder(key)
-	}
-	p.asyncProducer.Input() <- msg
+    // autoselect partition and offset for message
+    msg := &sarama.ProducerMessage{
+        Topic:     topic,
+        Value:     sarama.StringEncoder(value),
+    }
+    if key != "" {
+        msg.Key = sarama.StringEncoder(key)
+    }
+    p.asyncProducer.Input() <- msg
+
+    go func() {
+        select {
+        case <-p.asyncProducer.Successes():
+            // Message successfully delivered
+        case err := <-p.asyncProducer.Errors():
+            log.Printf("Failed to produce message: %v\n", err.Err)
+        }
+    }()
+
 }
 
 func (p *Producer) Close() error {
