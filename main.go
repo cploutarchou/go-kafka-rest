@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/Shopify/sarama"
-	"github.com/cploutarchou/go-kafka-rest/kafka"
 	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/Shopify/sarama"
+	"github.com/cploutarchou/go-kafka-rest/kafka"
 
 	"github.com/cploutarchou/go-kafka-rest/controllers"
 	"github.com/cploutarchou/go-kafka-rest/initializers"
@@ -82,10 +83,10 @@ func setupMicro() *fiber.App {
 		router.Post("/register", controllers.SignUpUser)
 		router.Post("/login", controllers.SignInUser)
 		router.Get("/logout", middleware.DeserializeUser, controllers.LogoutUser)
+		router.Post("/receive-message", receiveMessage)
 	})
 
 	micro.Get("/users/me", middleware.DeserializeUser, controllers.GetMe)
-	micro.Post("/receive-message", receiveMessage)
 	micro.All("*", func(c *fiber.Ctx) error {
 		path := c.Path()
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
