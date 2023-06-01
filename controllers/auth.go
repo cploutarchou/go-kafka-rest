@@ -2,6 +2,9 @@ package controllers
 
 import (
 	"fmt"
+	"github.com/cploutarchou/go-kafka-rest/types"
+	"log"
+	"net/http"
 	"strings"
 	"time"
 
@@ -11,6 +14,9 @@ import (
 	"github.com/golang-jwt/jwt"
 	"golang.org/x/crypto/bcrypt"
 )
+
+type AuthController struct {
+}
 
 // RespondError responds with the given error status and message.
 func RespondError(c *fiber.Ctx, status int, message string) error {
@@ -43,7 +49,7 @@ func CreateJWT(user *models.User) (string, error) {
 }
 
 // SignUpUser creates a new user with the given name, email and password.
-func SignUpUser(c *fiber.Ctx) error {
+func (u *UserController) SignUpUser(c *fiber.Ctx) error {
 	var payload *models.SignUpInput
 
 	if err := c.BodyParser(&payload); err != nil {
@@ -83,7 +89,7 @@ func SignUpUser(c *fiber.Ctx) error {
 }
 
 // SignInUser creates a new user with the given name, email and password.
-func SignInUser(c *fiber.Ctx) error {
+func (u *UserController) SignInUser(c *fiber.Ctx) error {
 	var payload *models.SignInInput
 
 	if err := c.BodyParser(&payload); err != nil {
@@ -114,9 +120,75 @@ func SignInUser(c *fiber.Ctx) error {
 }
 
 // LogoutUser logs out the currently logged in user.
-func LogoutUser(c *fiber.Ctx) error {
+func (u *UserController) LogoutUser(c *fiber.Ctx) error {
 	user := c.Locals("user").(*jwt.Token)
 	claims := user.Claims.(jwt.MapClaims)
 	claims["exp"] = time.Now().Unix()
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"status": "success", "message": "Logged out successfully"})
+}
+
+func (u *UserController) ReceiveMessage(c *fiber.Ctx) error {
+	// Parse JSON payload
+	var messagePayload types.MessagePayload
+	err := c.BodyParser(&messagePayload)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+			"status":  "fail",
+			"message": "Invalid request payload",
+		})
+	}
+
+	// Validate the message payload
+	if messagePayload.Topic == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+			"status":  "fail",
+			"message": "Topic is missing",
+		})
+	}
+
+	if messagePayload.Data == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+			"status":  "fail",
+			"message": "Data is missing",
+		})
+	}
+
+	// Add the message to the queue
+	mutex.Lock()
+	messageQueue = append(messageQueue, messagePayload)
+	mutex.Unlock()
+
+	// Notify a worker to process the message
+	workerPool <- struct{}{}
+	wg.Add(1)
+
+	go func() {
+		defer func() {
+			// Release the worker and mark the task as done
+			<-workerPool
+			wg.Done()
+		}()
+
+		// Process messages from the queue
+		for {
+			// Acquire a message from the queue
+			mutex.Lock()
+			if len(messageQueue) == 0 {
+				mutex.Unlock()
+				break
+			}
+			message := messageQueue[0]
+			messageQueue = messageQueue[1:]
+			mutex.Unlock()
+
+			// Process the message
+			producer.SendMessageAsync(message.Topic, message.Data, message.Key)
+			log.Printf("Kafka message produced! Topic: %s\n", message.Topic)
+		}
+	}()
+
+	return c.Status(http.StatusOK).JSON(fiber.Map{
+		"status":  "success",
+		"message": "Message received and added to the processing queue",
+	})
 }
