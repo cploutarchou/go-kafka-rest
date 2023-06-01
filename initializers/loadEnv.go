@@ -24,13 +24,18 @@ type Config struct {
 }
 
 var (
-	onceEnv sync.Once // guards Env initialization
-	config  Config    // global connection to the Env
+	onceEnv  sync.Once  // guards Env initialization
+	config   *Config    // global connection to the Env
+	configMu sync.Mutex // mutex for concurrent access to the config
 )
 
 // LoadConfig loads the configuration from the given path.
 func LoadConfig(path string) (cfg *Config, err error) {
+	// Load the configuration only once.
 	onceEnv.Do(func() {
+		configMu.Lock()
+		defer configMu.Unlock()
+
 		viper.AddConfigPath(path)
 		viper.SetConfigType("env")
 		viper.SetConfigName("sample")
@@ -42,5 +47,5 @@ func LoadConfig(path string) (cfg *Config, err error) {
 		}
 		err = viper.Unmarshal(&config)
 	})
-	return &config, err
+	return config, err
 }
