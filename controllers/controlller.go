@@ -33,7 +33,7 @@ func NewController() *Controller {
 	return &Controller{}
 }
 
-func (c *Controller) Init() {
+func (c *Controller) Initialize() {
 	var err error
 	if c.SaramaConfig == nil {
 		c.SaramaConfig = sarama.NewConfig()

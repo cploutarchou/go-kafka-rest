@@ -30,6 +30,8 @@ func init() {
 	}
 	brokers := strings.Split(config.KafkaBrokers, ",")
 	controller.SetBrokers(brokers)
+	controller = controllers.NewController()
+	controller.Initialize()
 	if err != nil {
 		log.Fatalf("Failed to connect to Kafka! \n%s", err.Error())
 	}
