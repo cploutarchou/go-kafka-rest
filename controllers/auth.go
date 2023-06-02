@@ -3,6 +3,7 @@ package controllers
 import (
 	"fmt"
 	"github.com/cploutarchou/go-kafka-rest/types"
+	"gorm.io/gorm"
 	"log"
 	"net/http"
 	"strings"
@@ -16,6 +17,7 @@ import (
 )
 
 type AuthController struct {
+	DB *gorm.DB
 }
 
 // RespondError responds with the given error status and message.
@@ -74,7 +76,6 @@ func (u *UserController) SignUpUser(c *fiber.Ctx) error {
 		Name:     payload.Name,
 		Email:    strings.ToLower(payload.Email),
 		Password: hashedPassword,
-		Photo:    &payload.Photo,
 	}
 
 	result := initializers.DB.Create(&newUser)
