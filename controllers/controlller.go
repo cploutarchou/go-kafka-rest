@@ -3,7 +3,9 @@ package controllers
 import (
 	"github.com/Shopify/sarama"
 	"github.com/cploutarchou/go-kafka-rest/kafka"
+	"github.com/cploutarchou/go-kafka-rest/models"
 	"github.com/cploutarchou/go-kafka-rest/types"
+	"gorm.io/gorm"
 	"sync"
 )
 
@@ -22,15 +24,44 @@ type Controller struct {
 	User           UserController
 	workerPoolSize int
 	workPool       chan struct{}
-	wg             sync.WaitGroup
-	mutex          sync.Mutex
+	wg             *sync.WaitGroup
+	mutex          *sync.Mutex
 	messageQueue   []types.MessagePayload
 	producer       kafka.Producer
 	SaramaConfig   *sarama.Config
+	DB             *gorm.DB
 }
 
-func NewController() *Controller {
-	return &Controller{}
+func NewController(db *gorm.DB, brokers_ []string) *Controller {
+
+	con := &Controller{
+		Auth:           NewAuthController(db),
+		User:           NewUserController(db),
+		workerPoolSize: workerPoolSize,
+		workPool:       workerPool,
+		wg:             &wg,
+		mutex:          &mutex,
+		messageQueue:   messageQueue,
+	}
+	brokers = brokers_
+	con.Initialize()
+	return con
+}
+
+func NewUserController(db *gorm.DB) UserController {
+	userCon := UserController{
+		DB:    db,
+		Model: models.User{},
+	}
+	userCon.Model.SetDB(db)
+	return userCon
+
+}
+
+func NewAuthController(db *gorm.DB) AuthController {
+	return AuthController{
+		DB: db,
+	}
 }
 
 func (c *Controller) Initialize() {
