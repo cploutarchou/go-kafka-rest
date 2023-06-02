@@ -48,3 +48,8 @@ func ConnectDB(config *Config) {
 		log.Println("🚀 Successfully connected to the database!")
 	})
 }
+
+// GetDB returns a connection to the database
+func GetDB() *gorm.DB {
+	return DB
+}
