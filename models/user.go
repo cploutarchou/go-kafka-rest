@@ -1,6 +1,8 @@
 package models
 
 import (
+	"fmt"
+	"gorm.io/gorm"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -14,10 +16,10 @@ type User struct {
 	Password  string     `gorm:"type:varchar(100);not null"`
 	Role      *string    `gorm:"type:varchar(50);default:'user';not null"`
 	Provider  *string    `gorm:"type:varchar(50);default:'local';not null"`
-	Photo     *string    `gorm:"not null;default:'default.png'"`
 	Verified  *bool      `gorm:"not null;default:false"`
 	CreatedAt *time.Time `gorm:"not null;default:now()"`
 	UpdatedAt *time.Time `gorm:"not null;default:now()"`
+	db        *gorm.DB   `gorm:"-"`
 }
 
 type SignUpInput struct {
@@ -25,7 +27,6 @@ type SignUpInput struct {
 	Email           string `json:"email" validate:"required"`
 	Password        string `json:"password" validate:"required,min=8"`
 	PasswordConfirm string `json:"passwordConfirm" validate:"required,min=8"`
-	Photo           string `json:"photo"`
 }
 
 type SignInInput struct {
@@ -38,7 +39,6 @@ type UserResponse struct {
 	Name      string    `json:"name,omitempty"`
 	Email     string    `json:"email,omitempty"`
 	Role      string    `json:"role,omitempty"`
-	Photo     string    `json:"photo,omitempty"`
 	Provider  string    `json:"provider"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -50,7 +50,6 @@ func FilterUserRecord(user *User) UserResponse {
 		Name:      user.Name,
 		Email:     user.Email,
 		Role:      *user.Role,
-		Photo:     *user.Photo,
 		Provider:  *user.Provider,
 		CreatedAt: *user.CreatedAt,
 		UpdatedAt: *user.UpdatedAt,
@@ -78,4 +77,28 @@ func ValidateStruct[T any](payload T) []*ErrorResponse {
 		}
 	}
 	return errors
+}
+
+func (u *User) GetByEmail(email string) (*User, error) {
+	var user User
+	u.db.Where("email = ?", email).First(&user)
+	// check if user is not found send error
+	if user.ID == nil {
+		return nil, fmt.Errorf("user with email %s not found", email)
+	}
+	return &user, nil
+}
+
+func (u *User) GetByID(id uuid.UUID) (*User, error) {
+	var user User
+	u.db.Where("id = ?", id).First(&user)
+	// check if user is not found send error
+	if user.ID == nil {
+		return nil, fmt.Errorf("user with id %s not found", id)
+	}
+	return &user, nil
+}
+
+func (u *User) SetDB(db *gorm.DB) {
+	u.db = db
 }
