@@ -17,21 +17,19 @@ import (
 var controller *controllers.Controller
 
 func init() {
-
-	controller = controllers.NewController()
 	config, err := initializers.LoadConfig(".")
 	if err != nil {
 		log.Fatalf("Failed to load environment variables! \n%s", err.Error())
 	}
 	initializers.ConnectDB(config)
+	brokers := strings.Split(config.KafkaBrokers, ",")
+	controller = controllers.NewController(initializers.GetDB(), brokers)
+
 	// check if broker is set in environment variables
 	if config.KafkaBrokers == "" {
 		log.Fatalf("Failed to load environment variables! \n%s", "KAFKA_BROKER is not set")
 	}
-	brokers := strings.Split(config.KafkaBrokers, ",")
-	controller.SetBrokers(brokers)
-	controller = controllers.NewController()
-	controller.Initialize()
+
 	if err != nil {
 		log.Fatalf("Failed to connect to Kafka! \n%s", err.Error())
 	}
@@ -83,6 +81,7 @@ func setupMicro() *fiber.App {
 		router.Post("/register", controller.User.SignUpUser)
 		router.Post("/login", controller.User.SignInUser)
 		router.Get("/logout", middleware.DeserializeUser, controller.User.LogoutUser)
+		router.Get("/refresh", middleware.DeserializeUser, controller.User.RefreshToken)
 		router.Post("/receive-message", controller.User.ReceiveMessage)
 	})
 
