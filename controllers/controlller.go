@@ -71,12 +71,12 @@ func (c *Controller) Initialize() {
 	var err error
 	if c.SaramaConfig == nil {
 		c.SaramaConfig = sarama.NewConfig()
-		producer, err = kafka.NewProducer(brokers, c.SaramaConfig, myProducerFactory, c.totalPartitions)
+		producer, err = kafka.NewProducer(brokers, c.SaramaConfig, myProducerFactory)
 		if err != nil {
 			panic(err)
 		}
 	} else {
-		producer, err = kafka.NewProducer(brokers, c.SaramaConfig, myProducerFactory, c.totalPartitions)
+		producer, err = kafka.NewProducer(brokers, c.SaramaConfig, myProducerFactory)
 		if err != nil {
 			panic(err)
 		}

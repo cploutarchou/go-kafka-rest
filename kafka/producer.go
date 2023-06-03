@@ -17,14 +17,12 @@ var initErr error
 type ProducerFactory func(brokers []string, conf *sarama.Config) (sarama.SyncProducer, sarama.AsyncProducer, error)
 
 type Producer struct {
-	syncProducer    sarama.SyncProducer
-	asyncProducer   sarama.AsyncProducer
-	mutex           *sync.Mutex
-	partition       int32
-	totalPartitions int32
+	syncProducer  sarama.SyncProducer
+	asyncProducer sarama.AsyncProducer
+	mutex         *sync.Mutex
 }
 
-func NewProducer(brokers []string, conf *sarama.Config, factory ProducerFactory, numberOfPartitions int32) (*Producer, error) {
+func NewProducer(brokers []string, conf *sarama.Config, factory ProducerFactory) (*Producer, error) {
 	once.Do(func() {
 		var config *sarama.Config
 		if conf == nil {
@@ -49,10 +47,9 @@ func NewProducer(brokers []string, conf *sarama.Config, factory ProducerFactory,
 		}
 
 		instance = &Producer{
-			syncProducer:    syncProducer,
-			asyncProducer:   asyncProducer,
-			mutex:           &sync.Mutex{},
-			totalPartitions: numberOfPartitions,
+			syncProducer:  syncProducer,
+			asyncProducer: asyncProducer,
+			mutex:         &sync.Mutex{},
 		}
 
 		log.Println("🚀 successfully connected to Kafka producer")
@@ -74,7 +71,6 @@ func (p *Producer) SendMessageSync(topic string, key string, value string) (part
 	msg := &sarama.ProducerMessage{
 		Topic:     topic,
 		Value:     sarama.StringEncoder(value),
-		Partition: p.selectPartition(),
 		Timestamp: time.Now().UTC(),
 		Offset:    sarama.OffsetNewest,
 	}
@@ -90,7 +86,6 @@ func (p *Producer) SendMessageAsync(topic string, key string, value string) {
 	msg := &sarama.ProducerMessage{
 		Topic:     topic,
 		Value:     sarama.StringEncoder(value),
-		Partition: p.selectPartition(),
 		Timestamp: time.Now().UTC(),
 		Offset:    sarama.OffsetNewest,
 	}
@@ -118,14 +113,4 @@ func (p *Producer) Close() error {
 		log.Fatalln("failed to shut down async producer cleanly", err)
 	}
 	return nil
-}
-
-func (p *Producer) selectPartition() int32 {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
-	selectedPartition := p.partition
-	p.partition = (p.partition + 1) % p.totalPartitions
-	fmt.Println("selected partition: ", selectedPartition)
-	return selectedPartition
 }
