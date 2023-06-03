@@ -3,12 +3,16 @@ package main
 import (
 	"fmt"
 	"github.com/cploutarchou/go-kafka-rest/controllers"
+	"github.com/cploutarchou/go-kafka-rest/middleware"
 	"log"
+	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/cploutarchou/go-kafka-rest/initializers"
-	"github.com/cploutarchou/go-kafka-rest/middleware"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -16,26 +20,23 @@ import (
 
 var controller *controllers.Controller
 
-func init() {
+func setupApp() (*fiber.App, error) {
 	config, err := initializers.LoadConfig(".")
 	if err != nil {
-		log.Fatalf("Failed to load environment variables! \n%s", err.Error())
+		return nil, fmt.Errorf("failed to load environment variables! \n%s", err.Error())
 	}
 	initializers.ConnectDB(config)
 	brokers := strings.Split(config.KafkaBrokers, ",")
-	controller = controllers.NewController(initializers.GetDB(), brokers)
+	controller = controllers.NewController(initializers.GetDB(), brokers, 7)
 
-	// check if broker is set in environment variables
 	if config.KafkaBrokers == "" {
-		log.Fatalf("Failed to load environment variables! \n%s", "KAFKA_BROKER is not set")
+		return nil, fmt.Errorf("failed to load environment variables! \n%s", "KAFKA_BROKER is not set")
 	}
 
 	if err != nil {
-		log.Fatalf("Failed to connect to Kafka! \n%s", err.Error())
+		return nil, fmt.Errorf("failed to connect to Kafka! \n%s", err.Error())
 	}
-}
 
-func setupApp() *fiber.App {
 	app := fiber.New()
 
 	app.Use(logger.New())
@@ -59,15 +60,13 @@ func setupApp() *fiber.App {
 			})
 		}
 		log.Printf("[%s] %s", c.Method(), c.Path())
-		log.Printf("Execution time: %v", time.Since(start))
+		log.Printf("execution time: %v", time.Since(start))
 		return nil
 	})
-	// set brokers as fiber app variable
 
-	return app
+	return app, nil
 }
-
-func setupMicro() *fiber.App {
+func setupMicro(controller *controllers.Controller) *fiber.App {
 	micro := fiber.New()
 
 	micro.Get("/healthchecker", func(c *fiber.Ctx) error {
@@ -90,7 +89,7 @@ func setupMicro() *fiber.App {
 		path := c.Path()
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"status":  "fail",
-			"message": fmt.Sprintf("Path: %v does not exist on this server", path),
+			"message": fmt.Sprintf("path: %v does not exist on this server", path),
 		})
 	})
 
@@ -98,10 +97,38 @@ func setupMicro() *fiber.App {
 }
 
 func main() {
-	app := setupApp()
-	micro := setupMicro()
+	app, err := setupApp()
+	if err != nil {
+		log.Fatalf("failed to setup app: %v", err)
+		return
+	}
+
+	micro := setupMicro(controller)
 
 	app.Mount("/api", micro)
 
-	log.Fatal(app.Listen(":8045"))
+	// Getting port from env variable
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8045" // Default port if not specified
+	}
+
+	go func() {
+		if err := app.Listen(":" + port); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %s\n", err)
+		}
+	}()
+
+	// Graceful Shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Print("shutdown Server ...")
+
+	if err := app.Shutdown(); err != nil {
+		log.Fatal("server Shutdown: ", err)
+	}
+
+	log.Print("server exiting")
 }
