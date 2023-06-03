@@ -2,43 +2,41 @@ package main
 
 import (
 	"fmt"
+	"github.com/cploutarchou/go-kafka-rest/controllers"
+	"github.com/cploutarchou/go-kafka-rest/middleware"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
-	"github.com/Shopify/sarama"
-	"github.com/cploutarchou/go-kafka-rest/kafka"
-
-	"github.com/cploutarchou/go-kafka-rest/controllers"
 	"github.com/cploutarchou/go-kafka-rest/initializers"
-	"github.com/cploutarchou/go-kafka-rest/middleware"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 )
 
-var producer *kafka.Producer
+var controller *controllers.Controller
 
-func init() {
+func setupApp() (*fiber.App, error) {
 	config, err := initializers.LoadConfig(".")
 	if err != nil {
-		log.Fatalf("Failed to load environment variables! \n%s", err.Error())
+		return nil, fmt.Errorf("failed to load environment variables! \n%s", err.Error())
 	}
 	initializers.ConnectDB(config)
-	// check if broker is set in environment variables
-	if config.KafkaBrokers == "" {
-		log.Fatalf("Failed to load environment variables! \n%s", "KAFKA_BROKER is not set")
-	}
 	brokers := strings.Split(config.KafkaBrokers, ",")
-	producer, err = kafka.NewProducer(brokers, nil, myProducerFactory)
+	controller = controllers.NewController(initializers.GetDB(), brokers, 7)
+
+	if config.KafkaBrokers == "" {
+		return nil, fmt.Errorf("failed to load environment variables! \n%s", "KAFKA_BROKER is not set")
+	}
 
 	if err != nil {
-		log.Fatalf("Failed to connect to Kafka! \n%s", err.Error())
+		return nil, fmt.Errorf("failed to connect to Kafka! \n%s", err.Error())
 	}
-}
 
-func setupApp() *fiber.App {
 	app := fiber.New()
 
 	app.Use(logger.New())
@@ -62,14 +60,13 @@ func setupApp() *fiber.App {
 			})
 		}
 		log.Printf("[%s] %s", c.Method(), c.Path())
-		log.Printf("Execution time: %v", time.Since(start))
+		log.Printf("execution time: %v", time.Since(start))
 		return nil
 	})
 
-	return app
+	return app, nil
 }
-
-func setupMicro() *fiber.App {
+func setupMicro(controller *controllers.Controller) *fiber.App {
 	micro := fiber.New()
 
 	micro.Get("/healthchecker", func(c *fiber.Ctx) error {
@@ -80,18 +77,22 @@ func setupMicro() *fiber.App {
 	})
 
 	micro.Route("/auth", func(router fiber.Router) {
-		router.Post("/register", controllers.SignUpUser)
-		router.Post("/login", controllers.SignInUser)
-		router.Get("/logout", middleware.DeserializeUser, controllers.LogoutUser)
-		router.Post("/receive-message", receiveMessage)
-	})
+		router.Post("/register", controller.User.SignUpUser)
+		router.Post("/login", controller.User.SignInUser)
+		router.Get("/logout", middleware.DeserializeUser, controller.User.LogoutUser)
+		router.Get("/refresh", middleware.DeserializeUser, controller.User.RefreshToken)
 
-	micro.Get("/users/me", middleware.DeserializeUser, controllers.GetMe)
+	})
+	micro.Route("/kafka", func(router fiber.Router) {
+		router.Post("/send-message", middleware.DeserializeUser, controller.User.SendMessage)
+
+	})
+	micro.Get("/users/me", middleware.DeserializeUser, controller.User.GetMe)
 	micro.All("*", func(c *fiber.Ctx) error {
 		path := c.Path()
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"status":  "fail",
-			"message": fmt.Sprintf("Path: %v does not exist on this server", path),
+			"message": fmt.Sprintf("path: %v does not exist on this server", path),
 		})
 	})
 
@@ -99,80 +100,38 @@ func setupMicro() *fiber.App {
 }
 
 func main() {
-	app := setupApp()
-	micro := setupMicro()
+	app, err := setupApp()
+	if err != nil {
+		log.Fatalf("failed to setup app: %v", err)
+		return
+	}
+
+	micro := setupMicro(controller)
 
 	app.Mount("/api", micro)
 
-	log.Fatal(app.Listen(":8045"))
-}
-
-func receiveMessage(c *fiber.Ctx) error {
-	// Parse JSON payload
-	var messagePayload map[string]interface{}
-	err := c.BodyParser(&messagePayload)
-	if err != nil {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
-			"status":  "fail",
-			"message": "Invalid request payload",
-		})
+	// Getting port from env variable
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8045" // Default port if not specified
 	}
 
-	// Process the message or perform any validations here
-	// check if topic exists in messagePayload and if data is not empty
-	if _, ok := messagePayload["topic"]; !ok {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
-			"status":  "fail",
-			"message": "Topic is missing",
-		})
-	}
-
-	if _, ok := messagePayload["data"]; !ok {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
-			"status":  "fail",
-			"message": "Data is missing",
-		})
-	}
-
-	// check if key exists in messagePayload
-	if _, ok := messagePayload["key"]; !ok {
-		messagePayload["key"] = ""
-	}
-	type Message struct {
-		Topic string `json:"topic"`
-		Data  string `json:"data"`
-		Key   string `json:"key"`
-	}
-
-	msg := &Message{
-		Topic: messagePayload["topic"].(string),
-		Data:  messagePayload["data"].(string),
-	}
-
-	producer.SendMessageAsync(msg.Topic, msg.Data, msg.Key)
-
-	log.Printf("Kafka message produced! Topic: %s\n", msg.Topic)
-
-	return c.Status(http.StatusOK).JSON(fiber.Map{
-		"status":  "success",
-		"message": "Message received and Kafka message produced",
-	})
-}
-
-func myProducerFactory(brokers []string, config *sarama.Config) (sarama.SyncProducer, sarama.AsyncProducer, error) {
-	syncProducer, err := sarama.NewSyncProducer(brokers, config)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	asyncProducer, err := sarama.NewAsyncProducer(brokers, config)
-	if err != nil {
-		err := syncProducer.Close()
-		if err != nil {
-			return nil, nil, err
+	go func() {
+		if err := app.Listen(":" + port); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %s\n", err)
 		}
-		return nil, nil, err
+	}()
+
+	// Graceful Shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Print("shutdown Server ...")
+
+	if err := app.Shutdown(); err != nil {
+		log.Fatal("server Shutdown: ", err)
 	}
 
-	return syncProducer, asyncProducer, nil
+	log.Print("server exiting")
 }

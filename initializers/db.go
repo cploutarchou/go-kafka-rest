@@ -12,8 +12,9 @@ import (
 )
 
 var (
-	onceDB sync.Once // guards DB initialization
-	DB     *gorm.DB  // global connection to the DB
+	onceDB sync.Once  // guards DB initialization
+	DB     *gorm.DB   // global connection to the DB
+	dbMu   sync.Mutex // mutex for concurrent access to the DB
 )
 
 // ConnectDB connects to the database and performs migrations.
@@ -27,9 +28,12 @@ func ConnectDB(config *Config) {
 			config.DBName,
 			config.DBPort,
 		)
+		dbMu.Lock()
+		defer dbMu.Unlock()
+
 		DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 		if err != nil {
-			log.Fatal("Failed to connect to the Database! \n", err.Error())
+			log.Fatal("Failed to connect to the Database!\n", err.Error())
 		}
 
 		DB.Exec("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"")
@@ -38,9 +42,14 @@ func ConnectDB(config *Config) {
 		log.Println("Running Migrations")
 		err = DB.AutoMigrate(&models.User{})
 		if err != nil {
-			log.Fatal("migration Failed:  \n", err.Error())
+			log.Fatal("Migration Failed:\n", err.Error())
 		}
 
 		log.Println("🚀 Successfully connected to the database!")
 	})
+}
+
+// GetDB returns a connection to the database
+func GetDB() *gorm.DB {
+	return DB
 }

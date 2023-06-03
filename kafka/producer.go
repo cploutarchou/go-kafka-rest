@@ -1,18 +1,20 @@
 package kafka
 
 import (
+	"errors"
+	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/Shopify/sarama"
 )
 
-type ProducerFactory func(brokers []string, config *sarama.Config) (sarama.SyncProducer, sarama.AsyncProducer, error)
+var once sync.Once
+var instance *Producer
+var initErr error
 
-var (
-	instance *Producer
-	once     sync.Once
-)
+type ProducerFactory func(brokers []string, conf *sarama.Config) (sarama.SyncProducer, sarama.AsyncProducer, error)
 
 type Producer struct {
 	syncProducer  sarama.SyncProducer
@@ -40,7 +42,8 @@ func NewProducer(brokers []string, conf *sarama.Config, factory ProducerFactory)
 
 		syncProducer, asyncProducer, err := factory(brokers, config)
 		if err != nil {
-			log.Fatal("Failed to start producer: ", err)
+			initErr = fmt.Errorf("failed to start producer: %w", err)
+			return
 		}
 
 		instance = &Producer{
@@ -48,8 +51,16 @@ func NewProducer(brokers []string, conf *sarama.Config, factory ProducerFactory)
 			asyncProducer: asyncProducer,
 			mutex:         &sync.Mutex{},
 		}
+
+		log.Println("🚀 successfully connected to Kafka producer")
 	})
-	log.Println("🚀 Successfully connected to Kafka producer")
+
+	if initErr != nil {
+		return nil, initErr
+	}
+	if instance == nil {
+		return nil, errors.New("producer is not initialized")
+	}
 	return instance, nil
 }
 
@@ -58,8 +69,10 @@ func (p *Producer) SendMessageSync(topic string, key string, value string) (part
 	defer p.mutex.Unlock()
 
 	msg := &sarama.ProducerMessage{
-		Topic: topic,
-		Value: sarama.StringEncoder(value),
+		Topic:     topic,
+		Value:     sarama.StringEncoder(value),
+		Timestamp: time.Now().UTC(),
+		Offset:    sarama.OffsetNewest,
 	}
 	if key != "" {
 		msg.Key = sarama.StringEncoder(key)
@@ -69,33 +82,35 @@ func (p *Producer) SendMessageSync(topic string, key string, value string) (part
 }
 
 func (p *Producer) SendMessageAsync(topic string, key string, value string) {
-    // autoselect partition and offset for message
-    msg := &sarama.ProducerMessage{
-        Topic:     topic,
-        Value:     sarama.StringEncoder(value),
-    }
-    if key != "" {
-        msg.Key = sarama.StringEncoder(key)
-    }
-    p.asyncProducer.Input() <- msg
+	// autos-elect partition and offset for message
+	msg := &sarama.ProducerMessage{
+		Topic:     topic,
+		Value:     sarama.StringEncoder(value),
+		Timestamp: time.Now().UTC(),
+		Offset:    sarama.OffsetNewest,
+	}
+	if key != "" {
+		msg.Key = sarama.StringEncoder(key)
+	}
+	p.asyncProducer.Input() <- msg
 
-    go func() {
-        select {
-        case <-p.asyncProducer.Successes():
-            // Message successfully delivered
-        case err := <-p.asyncProducer.Errors():
-            log.Printf("Failed to produce message: %v\n", err.Err)
-        }
-    }()
+	go func() {
+		select {
+		case <-p.asyncProducer.Successes():
+			// Message successfully delivered
+		case err := <-p.asyncProducer.Errors():
+			log.Printf("failed to produce message: %v\n", err.Err)
+		}
+	}()
 
 }
 
 func (p *Producer) Close() error {
 	if err := p.syncProducer.Close(); err != nil {
-		log.Fatalln("Failed to shut down sync producer cleanly", err)
+		log.Fatalln("failed to shut down sync producer cleanly", err)
 	}
 	if err := p.asyncProducer.Close(); err != nil {
-		log.Fatalln("Failed to shut down async producer cleanly", err)
+		log.Fatalln("failed to shut down async producer cleanly", err)
 	}
 	return nil
 }
