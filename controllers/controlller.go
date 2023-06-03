@@ -20,31 +20,34 @@ var (
 )
 
 type Controller struct {
-	Auth           AuthController
-	User           UserController
-	workerPoolSize int
-	workPool       chan struct{}
-	wg             *sync.WaitGroup
-	mutex          *sync.Mutex
-	messageQueue   []types.MessagePayload
-	producer       kafka.Producer
-	SaramaConfig   *sarama.Config
-	DB             *gorm.DB
+	Auth            AuthController
+	User            UserController
+	workerPoolSize  int
+	workPool        chan struct{}
+	wg              *sync.WaitGroup
+	mutex           *sync.Mutex
+	messageQueue    []types.MessagePayload
+	producer        kafka.Producer
+	SaramaConfig    *sarama.Config
+	DB              *gorm.DB
+	totalPartitions int32
 }
 
-func NewController(db *gorm.DB, brokers_ []string) *Controller {
+func NewController(db *gorm.DB, brokers_ []string, partitions int32) *Controller {
 
 	con := &Controller{
-		Auth:           NewAuthController(db),
-		User:           NewUserController(db),
-		workerPoolSize: workerPoolSize,
-		workPool:       workerPool,
-		wg:             &wg,
-		mutex:          &mutex,
-		messageQueue:   messageQueue,
+		Auth:            NewAuthController(db),
+		User:            NewUserController(db),
+		workerPoolSize:  workerPoolSize,
+		workPool:        workerPool,
+		wg:              &wg,
+		mutex:           &mutex,
+		messageQueue:    messageQueue,
+		totalPartitions: partitions,
 	}
 	brokers = brokers_
 	con.Initialize()
+
 	return con
 }
 
@@ -68,12 +71,12 @@ func (c *Controller) Initialize() {
 	var err error
 	if c.SaramaConfig == nil {
 		c.SaramaConfig = sarama.NewConfig()
-		producer, err = kafka.NewProducer(brokers, c.SaramaConfig, myProducerFactory)
+		producer, err = kafka.NewProducer(brokers, c.SaramaConfig, myProducerFactory, c.totalPartitions)
 		if err != nil {
 			panic(err)
 		}
 	} else {
-		producer, err = kafka.NewProducer(brokers, c.SaramaConfig, myProducerFactory)
+		producer, err = kafka.NewProducer(brokers, c.SaramaConfig, myProducerFactory, c.totalPartitions)
 		if err != nil {
 			panic(err)
 		}
@@ -85,7 +88,16 @@ func (c *Controller) SetBrokers(b []string) {
 	brokers = b
 }
 
+func (c *Controller) SetSaramaConfig(config *sarama.Config) {
+	c.SaramaConfig = config
+}
+
+func (c *Controller) SetWorkerPoolSize(size int) {
+	c.workerPoolSize = size
+}
+
 func myProducerFactory(brokers []string, config *sarama.Config) (sarama.SyncProducer, sarama.AsyncProducer, error) {
+
 	syncProducer, err := sarama.NewSyncProducer(brokers, config)
 	if err != nil {
 		return nil, nil, err
