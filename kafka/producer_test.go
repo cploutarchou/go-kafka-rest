@@ -23,8 +23,8 @@ func TestSingletonProducer(t *testing.T) {
 	}
 
 	// When
-	producer1, _ := NewProducer(nil, config, factory)
-	producer2, _ := NewProducer(nil, config, factory)
+	producer1, _ := NewProducer(nil, config, factory, 1)
+	producer2, _ := NewProducer(nil, config, factory, 1)
 
 	// Then
 	if !reflect.DeepEqual(producer1, producer2) {
