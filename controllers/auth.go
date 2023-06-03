@@ -128,7 +128,7 @@ func (u *UserController) LogoutUser(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"status": "success", "message": "Logged out successfully"})
 }
 
-func (u *UserController) ReceiveMessage(c *fiber.Ctx) error {
+func (u *UserController) SendMessage(c *fiber.Ctx) error {
 	// Parse JSON payload
 	var messagePayload types.MessagePayload
 	err := c.BodyParser(&messagePayload)

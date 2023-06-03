@@ -81,9 +81,12 @@ func setupMicro(controller *controllers.Controller) *fiber.App {
 		router.Post("/login", controller.User.SignInUser)
 		router.Get("/logout", middleware.DeserializeUser, controller.User.LogoutUser)
 		router.Get("/refresh", middleware.DeserializeUser, controller.User.RefreshToken)
-		router.Post("/receive-message", controller.User.ReceiveMessage)
-	})
 
+	})
+	micro.Route("/kafka", func(router fiber.Router) {
+		router.Post("/send-message", middleware.DeserializeUser, controller.User.SendMessage)
+
+	})
 	micro.Get("/users/me", middleware.DeserializeUser, controller.User.GetMe)
 	micro.All("*", func(c *fiber.Ctx) error {
 		path := c.Path()
