@@ -183,7 +183,7 @@ func (u *UserController) ReceiveMessage(c *fiber.Ctx) error {
 			mutex.Unlock()
 
 			// Process the message
-			producer.SendMessageAsync(message.Topic, message.Data, message.Key)
+			producer.SendMessageAsync(message.Topic, message.Key, message.Data)
 			log.Printf("Kafka message produced! Topic: %s\n", message.Topic)
 		}
 	}()
