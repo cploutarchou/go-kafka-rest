@@ -36,7 +36,6 @@ type Controller struct {
 func NewController(db *gorm.DB, brokers_ []string, partitions int32) *Controller {
 
 	con := &Controller{
-		Auth:            NewAuthController(db),
 		User:            NewUserController(db),
 		workerPoolSize:  workerPoolSize,
 		workPool:        workerPool,
@@ -59,12 +58,6 @@ func NewUserController(db *gorm.DB) UserController {
 	userCon.Model.SetDB(db)
 	return userCon
 
-}
-
-func NewAuthController(db *gorm.DB) AuthController {
-	return AuthController{
-		DB: db,
-	}
 }
 
 func (c *Controller) Initialize() {

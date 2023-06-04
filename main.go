@@ -29,22 +29,19 @@ func setupApp() (*fiber.App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load environment variables: %s", err.Error())
 	}
-
 	initializers.ConnectDB(config)
 	db := initializers.GetDB()
 	middleware = middlewares.NewMiddleware(config, db)
 	brokers := strings.Split(config.KafkaBrokers, ",")
 	controller = controllers.NewController(db, brokers, int32(config.KafkaNumOfPartitions))
-
 	if config.KafkaBrokers == "" {
 		return nil, fmt.Errorf("KAFKA_BROKER environment variable is not set")
 	}
-
 	app := fiber.New()
-
 	app.Use(logger.New())
+	allowedOrigins := strings.Join(config.CorsAllowedOrigins, ",")
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "http://localhost:3000",
+		AllowOrigins:     allowedOrigins,
 		AllowHeaders:     "Origin, Content-Type, Accept",
 		AllowMethods:     "GET, POST",
 		AllowCredentials: true,
@@ -72,7 +69,6 @@ func setupApp() (*fiber.App, error) {
 
 func setupRoutes(controller *controllers.Controller) *fiber.App {
 	app := fiber.New()
-
 	app.Get("/healthchecker", func(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"status":  "success",
