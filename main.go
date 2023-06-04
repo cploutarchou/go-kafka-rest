@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/cploutarchou/go-kafka-rest/controllers"
-	"github.com/cploutarchou/go-kafka-rest/middleware"
 	"log"
 	"net/http"
 	"os"
@@ -12,29 +10,34 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cploutarchou/go-kafka-rest/controllers"
 	"github.com/cploutarchou/go-kafka-rest/initializers"
+	middlewares "github.com/cploutarchou/go-kafka-rest/middleware"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 )
 
-var controller *controllers.Controller
+var (
+	controller *controllers.Controller
+	app        *fiber.App
+	middleware *middlewares.Middleware
+)
 
 func setupApp() (*fiber.App, error) {
 	config, err := initializers.LoadConfig(".")
 	if err != nil {
-		return nil, fmt.Errorf("failed to load environment variables! \n%s", err.Error())
+		return nil, fmt.Errorf("failed to load environment variables: %s", err.Error())
 	}
+
 	initializers.ConnectDB(config)
+	db := initializers.GetDB()
+	middleware = middlewares.NewMiddleware(config, db)
 	brokers := strings.Split(config.KafkaBrokers, ",")
-	controller = controllers.NewController(initializers.GetDB(), brokers, 7)
+	controller = controllers.NewController(db, brokers, 7)
 
 	if config.KafkaBrokers == "" {
-		return nil, fmt.Errorf("failed to load environment variables! \n%s", "KAFKA_BROKER is not set")
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to Kafka! \n%s", err.Error())
+		return nil, fmt.Errorf("KAFKA_BROKER environment variable is not set")
 	}
 
 	app := fiber.New()
@@ -66,29 +69,31 @@ func setupApp() (*fiber.App, error) {
 
 	return app, nil
 }
-func setupMicro(controller *controllers.Controller) *fiber.App {
-	micro := fiber.New()
 
-	micro.Get("/healthchecker", func(c *fiber.Ctx) error {
+func setupRoutes(controller *controllers.Controller) *fiber.App {
+	app := fiber.New()
+
+	app.Get("/healthchecker", func(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"status":  "success",
 			"message": "JWT Authentication with Golang, Fiber, and GORM",
 		})
 	})
 
-	micro.Route("/auth", func(router fiber.Router) {
+	app.Route("/auth", func(router fiber.Router) {
 		router.Post("/register", controller.User.SignUpUser)
 		router.Post("/login", controller.User.SignInUser)
 		router.Get("/logout", middleware.DeserializeUser, controller.User.LogoutUser)
 		router.Get("/refresh", middleware.DeserializeUser, controller.User.RefreshToken)
-
 	})
-	micro.Route("/kafka", func(router fiber.Router) {
+
+	app.Route("/kafka", func(router fiber.Router) {
 		router.Post("/send-message", middleware.DeserializeUser, controller.User.SendMessage)
-
 	})
-	micro.Get("/users/me", middleware.DeserializeUser, controller.User.GetMe)
-	micro.All("*", func(c *fiber.Ctx) error {
+
+	app.Get("/users/me", middleware.DeserializeUser, controller.User.GetMe)
+
+	app.All("*", func(c *fiber.Ctx) error {
 		path := c.Path()
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"status":  "fail",
@@ -96,29 +101,30 @@ func setupMicro(controller *controllers.Controller) *fiber.App {
 		})
 	})
 
-	return micro
+	return app
 }
 
 func main() {
-	app, err := setupApp()
+	var err error
+	app, err = setupApp()
 	if err != nil {
 		log.Fatalf("failed to setup app: %v", err)
 		return
 	}
 
-	micro := setupMicro(controller)
+	routes := setupRoutes(controller)
 
-	app.Mount("/api", micro)
+	app.Mount("/api", routes)
 
-	// Getting port from env variable
+	// Get the port from the environment variable or use the default port
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8045" // Default port if not specified
+		port = "8045"
 	}
 
 	go func() {
 		if err := app.Listen(":" + port); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %s\n", err)
+			log.Fatalf("server listen: %s", err)
 		}
 	}()
 
@@ -127,11 +133,11 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Print("shutdown Server ...")
+	log.Print("shutting down server...")
 
 	if err := app.Shutdown(); err != nil {
-		log.Fatal("server Shutdown: ", err)
+		log.Fatal("server shutdown:", err)
 	}
 
-	log.Print("server exiting")
+	log.Print("server exited")
 }
