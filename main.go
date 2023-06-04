@@ -34,7 +34,7 @@ func setupApp() (*fiber.App, error) {
 	db := initializers.GetDB()
 	middleware = middlewares.NewMiddleware(config, db)
 	brokers := strings.Split(config.KafkaBrokers, ",")
-	controller = controllers.NewController(db, brokers, 7)
+	controller = controllers.NewController(db, brokers, int32(config.KafkaNumOfPartitions))
 
 	if config.KafkaBrokers == "" {
 		return nil, fmt.Errorf("KAFKA_BROKER environment variable is not set")
