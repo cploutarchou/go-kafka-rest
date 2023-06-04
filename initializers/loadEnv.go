@@ -23,8 +23,8 @@ type Config struct {
 	JwtExpiresIn time.Duration `mapstructure:"JWT_EXPIRED_IN"`
 	JwtMaxAge    int           `mapstructure:"JWT_MAXAGE"`
 
-	ClientOrigin   string   `mapstructure:"CLIENT_ORIGIN"`
-	AllowedOrigins []string `mapstructure:"ALLOWED_ORIGINS"`
+	ClientOrigin       string   `mapstructure:"CLIENT_ORIGIN"`
+	CorsAllowedOrigins []string `mapstructure:"ALLOWED_ORIGINS"`
 
 	KafkaBrokers         string `mapstructure:"KAFKA_BROKERS"`
 	KafkaNumOfPartitions int    `mapstructure:"KAFKA_NUM_OF_PARTITIONS"`
