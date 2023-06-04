@@ -18,27 +18,40 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 )
 
+// Global variables for controllers, middleware, and fiber app
 var (
 	controller *controllers.Controller
 	app        *fiber.App
 	middleware *middlewares.Middleware
 )
 
+// setupApp initializes the fiber app, middleware, and controllers
+// It returns a new fiber app and an error if one occurs during setup
 func setupApp() (*fiber.App, error) {
+	// Load the configuration from environment variables
 	config, err := initializers.LoadConfig(".")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load environment variables: %s", err.Error())
 	}
+	// Connect to the database
 	initializers.ConnectDB(config)
 	db := initializers.GetDB()
+
+	// Initialize the middleware and controllers
 	middleware = middlewares.NewMiddleware(config, db)
 	brokers := strings.Split(config.KafkaBrokers, ",")
 	controller = controllers.NewController(db, brokers, int32(config.KafkaNumOfPartitions))
+
+	// Check if Kafka brokers are set
 	if config.KafkaBrokers == "" {
 		return nil, fmt.Errorf("KAFKA_BROKER environment variable is not set")
 	}
+
+	// Create a new fiber app
 	app := fiber.New()
+	// Use the logger middleware for request logging
 	app.Use(logger.New())
+	// Set the CORS policy
 	allowedOrigins := strings.Join(config.CorsAllowedOrigins, ",")
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     allowedOrigins,
@@ -47,6 +60,7 @@ func setupApp() (*fiber.App, error) {
 		AllowCredentials: true,
 	}))
 
+	// Custom middleware to log the execution time of each request
 	app.Use(func(c *fiber.Ctx) error {
 		start := time.Now()
 		if err := c.Next(); err != nil {
@@ -67,8 +81,11 @@ func setupApp() (*fiber.App, error) {
 	return app, nil
 }
 
+// setupRoutes sets up all the routes for the fiber app
 func setupRoutes(controller *controllers.Controller) *fiber.App {
 	app := fiber.New()
+
+	// Health check endpoint
 	app.Get("/healthchecker", func(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"status":  "success",
@@ -76,6 +93,7 @@ func setupRoutes(controller *controllers.Controller) *fiber.App {
 		})
 	})
 
+	// Authentication endpoints
 	app.Route("/auth", func(router fiber.Router) {
 		router.Post("/register", controller.User.SignUpUser)
 		router.Post("/login", controller.User.SignInUser)
@@ -83,12 +101,15 @@ func setupRoutes(controller *controllers.Controller) *fiber.App {
 		router.Get("/refresh", middleware.DeserializeUser, controller.User.RefreshToken)
 	})
 
+	// Kafka message send endpoint
 	app.Route("/kafka", func(router fiber.Router) {
 		router.Post("/send-message", middleware.DeserializeUser, controller.User.SendMessage)
 	})
 
+	// User details endpoint
 	app.Get("/users/me", middleware.DeserializeUser, controller.User.GetMe)
 
+	// Fallback route
 	app.All("*", func(c *fiber.Ctx) error {
 		path := c.Path()
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -100,7 +121,9 @@ func setupRoutes(controller *controllers.Controller) *fiber.App {
 	return app
 }
 
+// main is the entry point of the application
 func main() {
+	// Setup the fiber app
 	var err error
 	app, err = setupApp()
 	if err != nil {
@@ -108,8 +131,10 @@ func main() {
 		return
 	}
 
+	// Setup the routes
 	routes := setupRoutes(controller)
 
+	// Mount the routes on /api
 	app.Mount("/api", routes)
 
 	// Get the port from the environment variable or use the default port
@@ -118,19 +143,20 @@ func main() {
 		port = "8045"
 	}
 
+	// Start the server
 	go func() {
 		if err := app.Listen(":" + port); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server listen: %s", err)
 		}
 	}()
 
-	// Graceful Shutdown
+	// Wait for a shutdown signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
+	// Shutdown the server gracefully
 	log.Print("shutting down server...")
-
 	if err := app.Shutdown(); err != nil {
 		log.Fatal("server shutdown:", err)
 	}
