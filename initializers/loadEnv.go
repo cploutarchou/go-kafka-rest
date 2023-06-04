@@ -7,45 +7,63 @@ import (
 	"github.com/spf13/viper"
 )
 
-type Config struct {
-	DBHost         string `mapstructure:"POSTGRES_HOST"`     // POSTGRES_HOST
-	DBUserName     string `mapstructure:"POSTGRES_USER"`     // POSTGRES_USER
-	DBUserPassword string `mapstructure:"POSTGRES_PASSWORD"` // POSTGRES_PASSWORD
-	DBName         string `mapstructure:"POSTGRES_DB"`       // POSTGRES_DB
-	DBPort         string `mapstructure:"POSTGRES_PORT"`     // POSTGRES_PORT
-
-	JwtSecret    string        `mapstructure:"JWT_SECRET"`     // JWT_SECRET
-	JwtExpiresIn time.Duration `mapstructure:"JWT_EXPIRED_IN"` // JWT_EXPIRED_IN
-	JwtMaxAge    int           `mapstructure:"JWT_MAXAGE"`     // JWT_MAXAGE
-
-	ClientOrigin string `mapstructure:"CLIENT_ORIGIN"` // CLIENT_ORIGIN
-
-	KafkaBrokers string `mapstructure:"KAFKA_BROKERS"` // KAFKA_BROKER
-}
-
 var (
-	onceEnv  sync.Once  // guards Env initialization
-	config   *Config    // global connection to the Env
-	configMu sync.Mutex // mutex for concurrent access to the config
+	config      *Config
+	configMutex sync.Mutex
 )
 
-// LoadConfig loads the configuration from the given path.
-func LoadConfig(path string) (cfg *Config, err error) {
-	// Load the configuration only once.
-	onceEnv.Do(func() {
-		configMu.Lock()
-		defer configMu.Unlock()
+type Config struct {
+	DBHost         string `mapstructure:"POSTGRES_HOST"`
+	DBUserName     string `mapstructure:"POSTGRES_USER"`
+	DBUserPassword string `mapstructure:"POSTGRES_PASSWORD"`
+	DBName         string `mapstructure:"POSTGRES_DB"`
+	DBPort         string `mapstructure:"POSTGRES_PORT"`
 
-		viper.AddConfigPath(path)
-		viper.SetConfigType("env")
-		viper.SetConfigName("sample")
-		viper.AutomaticEnv()
+	JwtSecret    string        `mapstructure:"JWT_SECRET"`
+	JwtExpiresIn time.Duration `mapstructure:"JWT_EXPIRED_IN"`
+	JwtMaxAge    int           `mapstructure:"JWT_MAXAGE"`
 
-		err = viper.ReadInConfig()
-		if err != nil {
-			return
-		}
-		err = viper.Unmarshal(&config)
-	})
-	return config, err
+	ClientOrigin string `mapstructure:"CLIENT_ORIGIN"`
+
+	KafkaBrokers         string `mapstructure:"KAFKA_BROKERS"`
+	KafkaNumOfPartitions int    `mapstructure:"KAFKA_NUM_OF_PARTITIONS"`
+}
+
+func LoadConfig(path string) (*Config, error) {
+	configMutex.Lock()
+	defer configMutex.Unlock()
+
+	err := readAndParseConfig(path)
+	if err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
+
+func readAndParseConfig(path string) error {
+	setupViper(path)
+
+	err := viper.ReadInConfig()
+	if err != nil {
+		return err
+	}
+
+	return unmarshalConfig()
+}
+
+func setupViper(path string) {
+	viper.AddConfigPath(path)
+	viper.SetConfigType("env")
+	viper.SetConfigName("sample")
+	viper.AutomaticEnv()
+}
+
+func unmarshalConfig() error {
+	config = &Config{}
+	err := viper.Unmarshal(config)
+	if err != nil {
+		return err
+	}
+	return nil
 }
