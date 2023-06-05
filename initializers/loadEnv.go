@@ -1,6 +1,7 @@
 package initializers
 
 import (
+	"log"
 	"sync"
 	"time"
 
@@ -67,4 +68,17 @@ func unmarshalConfig() error {
 		return err
 	}
 	return nil
+}
+
+func GetConfig() *Config {
+	if config == nil {
+		//reload config
+
+		loadConfig, err := LoadConfig("./..")
+		if err != nil {
+			log.Fatalf("Failed to load config: %v", err)
+		}
+		config = loadConfig
+	}
+	return config
 }
