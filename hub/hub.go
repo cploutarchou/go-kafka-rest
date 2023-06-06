@@ -99,42 +99,50 @@ type Hub struct {
 	producer     kafka.Producer
 	SaramaConfig *sarama.Config
 	isTest       bool
+	config       *sarama.Config
+	logger       *log.Logger
+	brokers      []string
 }
 
 func NewHub(brokers_ []string, logger *log.Logger, config *sarama.Config) TheHub {
-	var err error
 
 	h := &Hub{
 		Clients:    make(map[ClientInterface]bool),
 		Broadcast:  make(chan Message, 100),
 		Register:   make(chan ClientInterface, 100),
 		Unregister: make(chan ClientInterface, 100),
+		brokers:    brokers_,
+		config:     config,
+		logger:     logger,
 	}
 
-	if config == nil {
-		h.SaramaConfig = sarama.NewConfig()
-		producer, err = kafka.NewProducer(brokers_, h.SaramaConfig, kafka.TheProducerFactory)
-		if err != nil {
-			panic(err)
-		}
-	} else {
-		producer, err = kafka.NewProducer(brokers, h.SaramaConfig, kafka.TheProducerFactory)
-		if err != nil {
-			panic(err)
-		}
-	}
-	if logger == nil {
-		h.Logger = log.New(log.Writer(), "hub: ", log.LstdFlags)
-	} else {
-		h.Logger = logger
-	}
-	h.producer = *producer
-
-	log.Print("🚀 Hub initialized")
 	return h
 }
 
 func (h *Hub) Run(ctx context.Context, logger Logger) {
+	var err error
+	if !h.isTest {
+		if h.config == nil {
+			h.SaramaConfig = sarama.NewConfig()
+			producer, err = kafka.NewProducer(h.brokers, h.SaramaConfig, kafka.TheProducerFactory)
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			producer, err = kafka.NewProducer(brokers, h.SaramaConfig, kafka.TheProducerFactory)
+			if err != nil {
+				panic(err)
+			}
+		}
+
+		if logger == nil {
+			h.Logger = log.New(log.Writer(), "hub: ", log.LstdFlags)
+		} else {
+			h.Logger = logger
+		}
+		h.producer = *producer
+	}
+	log.Print("🚀 Hub initialized")
 	for {
 		select {
 		case <-ctx.Done():

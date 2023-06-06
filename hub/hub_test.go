@@ -3,11 +3,9 @@ package hub
 import (
 	"bytes"
 	"context"
-	"github.com/cploutarchou/go-kafka-rest/initializers"
 	"github.com/stretchr/testify/assert"
 	"log"
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -28,19 +26,16 @@ func (MockConn) ReadMessage() (int, []byte, error) {
 }
 
 func TestHub(t *testing.T) {
-	config := initializers.GetConfig()
-	brokers = strings.Split(config.KafkaBrokers, ",")
-	h := NewHub(brokers, nil, nil)
+	h := NewHub(nil, nil, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
+	h.IsTest(true)
 	client := &Client{
 		Conn: &MockConn{bytes.NewBuffer(nil)},
 		Send: make(chan Message),
 	}
 	h.RegisterClient(client)
 
-	h.IsTest(true)
 	go h.Run(ctx, log.New(os.Stdout, "HUB: ", log.Ldate|log.Ltime))
 
 	message := Message{
@@ -61,10 +56,8 @@ func TestHub(t *testing.T) {
 }
 
 func TestClient(t *testing.T) {
-	config := initializers.GetConfig()
-	brokers = strings.Split(config.KafkaBrokers, ",")
-	hub_ := NewHub(brokers, nil, nil)
-
+	hub_ := NewHub(nil, nil, nil)
+	hub_.IsTest(true)
 	mockConn := &MockConn{bytes.NewBuffer(nil)}
 
 	if mockConn == nil {
