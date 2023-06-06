@@ -64,12 +64,12 @@ func (c *Controller) Initialize() {
 	var err error
 	if c.SaramaConfig == nil {
 		c.SaramaConfig = sarama.NewConfig()
-		producer, err = kafka.NewProducer(brokers, c.SaramaConfig, myProducerFactory)
+		producer, err = kafka.NewProducer(brokers, c.SaramaConfig, kafka.TheProducerFactory)
 		if err != nil {
 			panic(err)
 		}
 	} else {
-		producer, err = kafka.NewProducer(brokers, c.SaramaConfig, myProducerFactory)
+		producer, err = kafka.NewProducer(brokers, c.SaramaConfig, kafka.TheProducerFactory)
 		if err != nil {
 			panic(err)
 		}
@@ -87,23 +87,4 @@ func (c *Controller) SetSaramaConfig(config *sarama.Config) {
 
 func (c *Controller) SetWorkerPoolSize(size int) {
 	c.workerPoolSize = size
-}
-
-func myProducerFactory(brokers []string, config *sarama.Config) (sarama.SyncProducer, sarama.AsyncProducer, error) {
-
-	syncProducer, err := sarama.NewSyncProducer(brokers, config)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	asyncProducer, err := sarama.NewAsyncProducer(brokers, config)
-	if err != nil {
-		err := syncProducer.Close()
-		if err != nil {
-			return nil, nil, err
-		}
-		return nil, nil, err
-	}
-
-	return syncProducer, asyncProducer, nil
 }
