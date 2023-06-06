@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/cploutarchou/go-kafka-rest/hub"
 	"github.com/gofiber/websocket/v2"
@@ -108,6 +109,10 @@ func setupRoutes(controller *controllers.Controller) *fiber.App {
 	if config.EnableWebsocket {
 		// log that we are starting the hub and pass the logger to it
 		hub_ := hub.NewHub(brokers, logger_, nil)
+		ctx := context.Background()
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		go hub_.Run(ctx, logger_)
 		app.Route("/kafka", func(router fiber.Router) {
 			router.Post("/send-message", middleware.DeserializeUser, controller.User.SendMessage)
 			router.Get("/ws", middleware.DeserializeUser, websocket.New(func(c *websocket.Conn) {
