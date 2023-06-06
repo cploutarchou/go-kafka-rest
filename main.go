@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"github.com/cploutarchou/go-kafka-rest/hub"
+	"github.com/gofiber/websocket/v2"
 	"log"
 	"net/http"
 	"os"
@@ -84,7 +86,6 @@ func setupApp() (*fiber.App, error) {
 // setupRoutes sets up all the routes for the fiber app
 func setupRoutes(controller *controllers.Controller) *fiber.App {
 	app := fiber.New()
-
 	// Health check endpoint
 	app.Get("/healthchecker", func(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
@@ -101,9 +102,13 @@ func setupRoutes(controller *controllers.Controller) *fiber.App {
 		router.Get("/refresh", middleware.DeserializeUser, controller.User.RefreshToken)
 	})
 
-	// Kafka message send endpoint
+	logger_ := log.New(os.Stdout, "logger: ", log.Lshortfile)
+	hub_ := hub.NewHub()
 	app.Route("/kafka", func(router fiber.Router) {
 		router.Post("/send-message", middleware.DeserializeUser, controller.User.SendMessage)
+		router.Get("/ws", middleware.DeserializeUser, websocket.New(func(c *websocket.Conn) {
+			hub_.UpgradeWebSocket(c, logger_)
+		}))
 	})
 
 	// User details endpoint
