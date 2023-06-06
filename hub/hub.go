@@ -2,13 +2,22 @@ package hub
 
 import (
 	"context"
+	"encoding/json"
+	"github.com/Shopify/sarama"
+	"github.com/cploutarchou/go-kafka-rest/kafka"
+	"log"
 	"sync"
 
 	"github.com/gofiber/websocket/v2"
 )
 
+var brokers []string         // Kafka brokers
+var producer *kafka.Producer // Kafka producer
+
 type Message struct {
-	Data []byte
+	Topic string `json:"topic"`
+	Key   string `json:"key"`
+	Data  string `json:"data"`
 }
 
 type ConnectionInterface interface {
@@ -26,8 +35,9 @@ type ClientInterface interface {
 }
 
 type Client struct {
-	Conn ConnectionInterface
-	Send chan Message
+	Conn     ConnectionInterface
+	Send     chan Message
+	Producer kafka.Producer
 }
 
 type WebSocketConnection struct {
@@ -58,6 +68,7 @@ func (c *Client) SendMessage(msg Message) error {
 func (c *Client) ReadMessage() (int, []byte, error) {
 	return c.Conn.ReadMessage()
 }
+
 func (c *Client) CloseSend() error {
 	close(c.Send)
 	return nil
@@ -68,84 +79,56 @@ type TheHub interface {
 	RegisterClient(client ClientInterface)
 	UnregisterClient(client ClientInterface)
 	BroadcastMessage(message Message)
+	HandleWebSocketMessage(message Message)
 	UpgradeWebSocket(c *websocket.Conn, logger Logger)
-}
-
-func (c *Client) ReadPump(hub TheHub, logger Logger) {
-	defer func() {
-		hub.UnregisterClient(c)
-		err := c.GetConnection().Close()
-		if err != nil {
-			logger.Printf("Error closing connection: %v", err)
-		}
-	}()
-
-	for {
-		_, data, err := c.GetConnection().ReadMessage()
-		if err != nil {
-			logger.Printf("Error reading message: %v", err)
-			return
-		}
-
-		message := Message{
-			Data: data,
-		}
-
-		hub.BroadcastMessage(message)
-	}
-}
-
-func (c *Client) WritePump(logger Logger) {
-	defer func() {
-		err := c.GetConnection().Close()
-		if err != nil {
-			logger.Printf("Error closing connection: %v", err)
-			return
-		}
-	}()
-
-	for {
-		select {
-		case message, ok := <-c.Send:
-			if !ok {
-				err := c.GetConnection().Close()
-				if err != nil {
-					logger.Printf("Error closing connection: %v", err)
-					return
-				}
-
-				return
-			}
-
-			err := c.GetConnection().WriteMessage(websocket.TextMessage, message.Data)
-			if err != nil {
-				logger.Printf("Error writing message: %v", err)
-				return
-			}
-		}
-	}
-}
-
-type Hub struct {
-	Clients    map[ClientInterface]bool
-	Broadcast  chan Message         // Add a Broadcast channel
-	Register   chan ClientInterface // Add a Register channel
-	Unregister chan ClientInterface // Add an Unregister channel
-	mutex      sync.RWMutex         // Add a mutex member variable
-	Logger     Logger               // Add a Logger member variable
 }
 
 type Logger interface {
 	Printf(format string, v ...interface{})
 }
 
-func NewHub() TheHub {
-	return &Hub{
+type Hub struct {
+	Clients      map[ClientInterface]bool
+	Broadcast    chan Message
+	Register     chan ClientInterface
+	Unregister   chan ClientInterface
+	mutex        sync.RWMutex
+	Logger       Logger
+	producer     kafka.Producer
+	SaramaConfig *sarama.Config
+}
+
+func NewHub(brokers_ []string, logger *log.Logger, config *sarama.Config) TheHub {
+	var err error
+
+	h := &Hub{
 		Clients:    make(map[ClientInterface]bool),
 		Broadcast:  make(chan Message, 100),
 		Register:   make(chan ClientInterface, 100),
 		Unregister: make(chan ClientInterface, 100),
 	}
+
+	if config == nil {
+		h.SaramaConfig = sarama.NewConfig()
+		producer, err = kafka.NewProducer(brokers_, h.SaramaConfig, kafka.TheProducerFactory)
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		producer, err = kafka.NewProducer(brokers, h.SaramaConfig, kafka.TheProducerFactory)
+		if err != nil {
+			panic(err)
+		}
+	}
+	if logger == nil {
+		h.Logger = log.New(log.Writer(), "hub: ", log.LstdFlags)
+	} else {
+		h.Logger = logger
+	}
+	h.producer = *producer
+
+	log.Print("🚀 Hub initialized")
+	return h
 }
 
 func (h *Hub) Run(ctx context.Context, logger Logger) {
@@ -196,6 +179,20 @@ func (h *Hub) BroadcastMessage(message Message) {
 	h.Broadcast <- message
 }
 
+func (h *Hub) HandleWebSocketMessage(message Message) {
+	// Send the message to Kafka
+	go func() {
+		value := message.Data
+		_, _, err := h.producer.SendMessageSync(message.Topic, message.Key, value)
+		if err != nil {
+			h.Logger.Printf("Failed to send message to Kafka: %v", err)
+		}
+	}()
+
+	// Broadcast the message to other WebSocket clients
+	h.BroadcastMessage(message)
+}
+
 func (h *Hub) UpgradeWebSocket(c *websocket.Conn, logger Logger) {
 	client := &Client{
 		Conn: &WebSocketConnection{Conn: c},
@@ -209,4 +206,62 @@ func (h *Hub) UpgradeWebSocket(c *websocket.Conn, logger Logger) {
 	}()
 
 	client.ReadPump(h, logger)
+}
+
+func (c *Client) WritePump(logger Logger) {
+	defer func() {
+		err := c.GetConnection().Close()
+		if err != nil {
+			logger.Printf("Error closing connection: %v", err)
+		}
+	}()
+
+	for {
+		select {
+		case message, ok := <-c.Send:
+			if !ok {
+				err := c.GetConnection().Close()
+				if err != nil {
+					logger.Printf("Error closing connection: %v", err)
+				}
+				return
+			}
+
+			err := c.GetConnection().WriteMessage(websocket.TextMessage, []byte(message.Data))
+			if err != nil {
+				logger.Printf("Error writing message: %v", err)
+				return
+			}
+		}
+	}
+}
+
+func (c *Client) ReadPump(hub TheHub, logger Logger) {
+	defer func() {
+		hub.UnregisterClient(c)
+		err := c.GetConnection().Close()
+		if err != nil {
+			logger.Printf("Error closing connection: %v", err)
+		}
+	}()
+
+	for {
+		_, data, err := c.GetConnection().ReadMessage()
+		if err != nil {
+			logger.Printf("Error reading message: %v", err)
+			return
+		}
+
+		type ReceivedMessage struct {
+			Message Message `json:"message"`
+		}
+		var message Message
+		err = json.Unmarshal(data, &message)
+		if err != nil {
+			logger.Printf("Error unmarshalling message: %v", err)
+			return
+		}
+
+		hub.HandleWebSocketMessage(message) // Call the HandleWebSocketMessage method of the hub
+	}
 }
