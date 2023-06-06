@@ -68,6 +68,7 @@ type TheHub interface {
 	RegisterClient(client ClientInterface)
 	UnregisterClient(client ClientInterface)
 	BroadcastMessage(message Message)
+	UpgradeWebSocket(c *websocket.Conn, logger Logger)
 }
 
 func (c *Client) ReadPump(hub TheHub, logger Logger) {
@@ -127,10 +128,11 @@ func (c *Client) WritePump(logger Logger) {
 
 type Hub struct {
 	Clients    map[ClientInterface]bool
-	Broadcast  chan Message
-	Register   chan ClientInterface
-	Unregister chan ClientInterface
-	mutex      sync.RWMutex
+	Broadcast  chan Message         // Add a Broadcast channel
+	Register   chan ClientInterface // Add a Register channel
+	Unregister chan ClientInterface // Add an Unregister channel
+	mutex      sync.RWMutex         // Add a mutex member variable
+	Logger     Logger               // Add a Logger member variable
 }
 
 type Logger interface {
@@ -192,4 +194,19 @@ func (h *Hub) UnregisterClient(client ClientInterface) {
 
 func (h *Hub) BroadcastMessage(message Message) {
 	h.Broadcast <- message
+}
+
+func (h *Hub) UpgradeWebSocket(c *websocket.Conn, logger Logger) {
+	client := &Client{
+		Conn: &WebSocketConnection{Conn: c},
+		Send: make(chan Message),
+	}
+	h.RegisterClient(client)
+
+	go func() {
+		defer h.UnregisterClient(client)
+		client.WritePump(logger)
+	}()
+
+	client.ReadPump(h, logger)
 }
