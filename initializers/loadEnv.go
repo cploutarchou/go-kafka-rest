@@ -29,6 +29,8 @@ type Config struct {
 
 	KafkaBrokers         string `mapstructure:"KAFKA_BROKERS"`
 	KafkaNumOfPartitions int    `mapstructure:"KAFKA_NUM_OF_PARTITIONS"`
+
+	EnableWebsocket bool `mapstructure:"ENABLE_WEBSOCKET"`
 }
 
 func LoadConfig(path string) (*Config, error) {
