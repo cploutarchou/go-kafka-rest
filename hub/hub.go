@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/Shopify/sarama"
 	"github.com/cploutarchou/go-kafka-rest/kafka"
 	"log"
@@ -81,6 +82,7 @@ type TheHub interface {
 	BroadcastMessage(message Message)
 	HandleWebSocketMessage(message Message)
 	UpgradeWebSocket(c *websocket.Conn, logger Logger)
+	IsTest(isTest bool)
 }
 
 type Logger interface {
@@ -96,6 +98,7 @@ type Hub struct {
 	Logger       Logger
 	producer     kafka.Producer
 	SaramaConfig *sarama.Config
+	isTest       bool
 }
 
 func NewHub(brokers_ []string, logger *log.Logger, config *sarama.Config) TheHub {
@@ -180,6 +183,10 @@ func (h *Hub) BroadcastMessage(message Message) {
 }
 
 func (h *Hub) HandleWebSocketMessage(message Message) {
+	if h.isTest {
+		fmt.Printf("Message received: %v\n", message)
+		return
+	}
 	// Send the message to Kafka
 	go func() {
 		value := message.Data
@@ -264,4 +271,8 @@ func (c *Client) ReadPump(hub TheHub, logger Logger) {
 
 		hub.HandleWebSocketMessage(message) // Call the HandleWebSocketMessage method of the hub
 	}
+}
+
+func (h *Hub) IsTest(isTest bool) {
+	h.isTest = isTest
 }

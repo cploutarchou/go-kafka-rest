@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"strings"
-	"sync"
 	"testing"
 )
 
@@ -41,26 +40,22 @@ func TestHub(t *testing.T) {
 	}
 	h.RegisterClient(client)
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-
+	h.IsTest(true)
 	go h.Run(ctx, log.New(os.Stdout, "HUB: ", log.Ldate|log.Ltime))
 
 	message := Message{
-		Data:  string([]byte("Hello, world!")),
+		Data:  "Hello, world!",
 		Topic: "test",
 		Key:   "test",
 	}
 	h.BroadcastMessage(message)
 
 	go func() {
-		defer wg.Done()
+
 		receivedMessage := <-client.Send
 
 		assert.Equal(t, message, receivedMessage, "received message does not match the broadcasted message")
 	}()
-
-	wg.Wait()
 
 	h.UnregisterClient(client)
 }
@@ -84,7 +79,7 @@ func TestClient(t *testing.T) {
 	go client.ReadPump(hub_, log.New(os.Stdout, "READPUMP: ", log.Ldate|log.Ltime))
 
 	message := Message{
-		Data:  string([]byte("Hello, world!")),
+		Data:  "Hello, world!",
 		Topic: "test",
 		Key:   "test",
 	}
@@ -98,12 +93,10 @@ func TestClient(t *testing.T) {
 
 	go client.WritePump(log.New(os.Stdout, "WRITEPUMP: ", log.Ldate|log.Ltime))
 	client.Send <- Message{
-		Data:  string([]byte("Hello, world!")),
+		Data:  "Hello, world!",
 		Topic: "test",
 		Key:   "test",
 	}
 	err := client.CloseSend()
 	assert.NoError(t, err, "closing client's send channel should not return error")
 }
-
-// TestConcurrentClients & TestConcurrentBroadcast can be updated following the similar pattern.
