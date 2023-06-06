@@ -3,9 +3,11 @@ package hub
 import (
 	"bytes"
 	"context"
+	"github.com/cploutarchou/go-kafka-rest/initializers"
 	"github.com/stretchr/testify/assert"
 	"log"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -27,7 +29,9 @@ func (MockConn) ReadMessage() (int, []byte, error) {
 }
 
 func TestHub(t *testing.T) {
-	h := NewHub()
+	config := initializers.GetConfig()
+	brokers = strings.Split(config.KafkaBrokers, ",")
+	h := NewHub(brokers, nil, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -43,7 +47,9 @@ func TestHub(t *testing.T) {
 	go h.Run(ctx, log.New(os.Stdout, "HUB: ", log.Ldate|log.Ltime))
 
 	message := Message{
-		Data: []byte("Hello, World!"),
+		Data:  string([]byte("Hello, world!")),
+		Topic: "test",
+		Key:   "test",
 	}
 	h.BroadcastMessage(message)
 
@@ -60,7 +66,9 @@ func TestHub(t *testing.T) {
 }
 
 func TestClient(t *testing.T) {
-	hub_ := NewHub()
+	config := initializers.GetConfig()
+	brokers = strings.Split(config.KafkaBrokers, ",")
+	hub_ := NewHub(brokers, nil, nil)
 
 	mockConn := &MockConn{bytes.NewBuffer(nil)}
 
@@ -76,7 +84,9 @@ func TestClient(t *testing.T) {
 	go client.ReadPump(hub_, log.New(os.Stdout, "READPUMP: ", log.Ldate|log.Ltime))
 
 	message := Message{
-		Data: []byte("Hello, world!"),
+		Data:  string([]byte("Hello, world!")),
+		Topic: "test",
+		Key:   "test",
 	}
 
 	go func() {
@@ -88,9 +98,10 @@ func TestClient(t *testing.T) {
 
 	go client.WritePump(log.New(os.Stdout, "WRITEPUMP: ", log.Ldate|log.Ltime))
 	client.Send <- Message{
-		Data: []byte("Hello, server!"),
+		Data:  string([]byte("Hello, world!")),
+		Topic: "test",
+		Key:   "test",
 	}
-
 	err := client.CloseSend()
 	assert.NoError(t, err, "closing client's send channel should not return error")
 }
