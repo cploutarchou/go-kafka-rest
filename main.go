@@ -25,13 +25,16 @@ var (
 	controller *controllers.Controller
 	app        *fiber.App
 	middleware *middlewares.Middleware
+	config     *initializers.Config
+	brokers    []string
 )
 
 // setupApp initializes the fiber app, middleware, and controllers
 // It returns a new fiber app and an error if one occurs during setup
 func setupApp() (*fiber.App, error) {
+	var err error
 	// Load the configuration from environment variables
-	config, err := initializers.LoadConfig(".")
+	config, err = initializers.LoadConfig(".")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load environment variables: %s", err.Error())
 	}
@@ -41,7 +44,7 @@ func setupApp() (*fiber.App, error) {
 
 	// Initialize the middleware and controllers
 	middleware = middlewares.NewMiddleware(config, db)
-	brokers := strings.Split(config.KafkaBrokers, ",")
+	brokers = strings.Split(config.KafkaBrokers, ",")
 	controller = controllers.NewController(db, brokers, int32(config.KafkaNumOfPartitions))
 
 	// Check if Kafka brokers are set
@@ -101,15 +104,21 @@ func setupRoutes(controller *controllers.Controller) *fiber.App {
 		router.Get("/logout", middleware.DeserializeUser, controller.User.LogoutUser)
 		router.Get("/refresh", middleware.DeserializeUser, controller.User.RefreshToken)
 	})
-
 	logger_ := log.New(os.Stdout, "logger: ", log.Lshortfile)
-	hub_ := hub.NewHub()
-	app.Route("/kafka", func(router fiber.Router) {
-		router.Post("/send-message", middleware.DeserializeUser, controller.User.SendMessage)
-		router.Get("/ws", middleware.DeserializeUser, websocket.New(func(c *websocket.Conn) {
-			hub_.UpgradeWebSocket(c, logger_)
-		}))
-	})
+	if config.EnableWebsocket {
+		// log that we are starting the hub and pass the logger to it
+		hub_ := hub.NewHub(brokers, logger_, nil)
+		app.Route("/kafka", func(router fiber.Router) {
+			router.Post("/send-message", middleware.DeserializeUser, controller.User.SendMessage)
+			router.Get("/ws", middleware.DeserializeUser, websocket.New(func(c *websocket.Conn) {
+				hub_.UpgradeWebSocket(c, logger_)
+			}))
+		})
+	} else {
+		app.Route("/kafka", func(router fiber.Router) {
+			router.Post("/send-message", middleware.DeserializeUser, controller.User.SendMessage)
+		})
+	}
 
 	// User details endpoint
 	app.Get("/users/me", middleware.DeserializeUser, controller.User.GetMe)
