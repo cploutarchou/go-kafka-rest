@@ -40,6 +40,11 @@ func NewProducer(brokers []string, conf *sarama.Config, factory ProducerFactory)
 		config.Producer.Return.Successes = true
 		config.Producer.Compression = sarama.CompressionSnappy
 
+		// set group id if not set
+		if config.ClientID == "" {
+			config.ClientID = "kafka-go"
+		}
+
 		syncProducer, asyncProducer, err := factory(brokers, config)
 		if err != nil {
 			initErr = fmt.Errorf("failed to start producer: %w", err)

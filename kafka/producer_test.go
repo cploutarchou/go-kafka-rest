@@ -1,6 +1,7 @@
 package kafka
 
 import (
+	"errors"
 	"github.com/Shopify/sarama"
 	"github.com/Shopify/sarama/mocks"
 	"reflect"
@@ -62,5 +63,35 @@ func TestSendMessageSync(t *testing.T) {
 	}
 	if offset != 1 { // Update the expected offset value to 1
 		t.Errorf("Expected offset 1, got %d", offset)
+	}
+}
+
+func TestSendMessagesASync(t *testing.T) {
+	// Given
+	mockAsyncProducer := mocks.NewAsyncProducer(t, nil)
+	mockAsyncProducer.ExpectInputAndFail(errors.New("test error"))
+
+	producer := &Producer{
+		asyncProducer: mockAsyncProducer,
+		mutex:         &sync.Mutex{},
+	}
+
+	// When
+	topic := "test-topic"
+	key := "test-key"
+	value := "test-value"
+
+	producer.SendMessageAsync(topic, key, value)
+
+	// Then
+	// Expect an error from the producer channel because the error is handled internally
+	select {
+	case err := <-producer.asyncProducer.Errors():
+		if err == nil {
+			t.Error("Expected an error, got nil")
+		}
+	case <-producer.asyncProducer.Successes():
+		// Do nothing pass the test
+
 	}
 }
